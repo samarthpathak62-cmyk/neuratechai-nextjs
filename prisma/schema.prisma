@@ -1,0 +1,275 @@
+// ============================================================
+// Neura Tech AI — Prisma schema
+// Postgres. Run `npx prisma migrate dev` after setting DATABASE_URL.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Auth.js (NextAuth) required models ----------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  // Only set for users who registered with email + password.
+  // OAuth-only users (Google/GitHub) have no password.
+  passwordHash  String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  subscription  Subscription?
+  apiKeys       ApiKey[]
+  usageLogs     UsageLog[]
+  blogPosts     BlogPost[]
+  researchPapers ResearchPaper[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------- Billing ----------
+
+enum PlanTier {
+  FREE
+  STARTER
+  PRO
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+model Subscription {
+  id                   String              @id @default(cuid())
+  userId               String              @unique
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier                 PlanTier            @default(FREE)
+  status               SubscriptionStatus  @default(ACTIVE)
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?             @unique
+  stripePriceId        String?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean             @default(false)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+}
+
+// ---------- API keys (for programmatic access to /api/chat etc.) ----------
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  // Only a hash is stored — the raw key is shown once at creation time.
+  keyHash    String    @unique
+  keyPreview String // last 4 characters, for display ("sk-...ab12")
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revoked    Boolean   @default(false)
+}
+
+// ---------- Usage tracking (for billing limits / dashboards) ----------
+
+model UsageLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model     String
+  endpoint  String // "chat" | "vision" | "image" | "embeddings" | "audio"
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ---------- Hugging Face model sync ----------
+// Populated by /api/huggingface/sync (cron or admin-triggered), which
+// calls the public HF API (https://huggingface.co/api/models/{id}) and
+// upserts the latest stats. The Models page reads from this table instead
+// of calling Hugging Face on every page load.
+
+model SyncedModel {
+  id           String   @id @default(cuid())
+  hfModelId    String   @unique // e.g. "neuratech-ai/neuron-14b"
+  displayName  String
+  downloads    Int      @default(0)
+  likes        Int      @default(0)
+  pipelineTag  String? // e.g. "text-generation"
+  library      String? // e.g. "transformers"
+  lastSyncedAt DateTime @default(now())
+}
+
+// ---------- Live benchmarks ----------
+
+model Benchmark {
+  id          String   @id @default(cuid())
+  modelName   String // "Neuron 14B"
+  suite       String // "MMLU", "HumanEval", "GSM8K"...
+  score       Float // 0-100
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([modelName])
+}
+
+// ---------- Datasets ----------
+
+model Dataset {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @db.Text
+  sizeLabel   String // "1M samples", "50K rows"...
+  license     String
+  downloadUrl String?
+  createdAt   DateTime @default(now())
+}
+
+// ---------- Changelog ----------
+
+model ChangelogEntry {
+  id          String   @id @default(cuid())
+  version     String // "v2.4.0"
+  title       String
+  body        String   @db.Text
+  tag         String // "Feature" | "Fix" | "Improvement" | "Breaking"
+  publishedAt DateTime @default(now())
+}
+
+// ---------- Roadmap ----------
+
+enum RoadmapStatus {
+  NOW
+  NEXT
+  LATER
+  SHIPPED
+}
+
+model RoadmapItem {
+  id          String        @id @default(cuid())
+  title       String
+  description String        @db.Text
+  status      RoadmapStatus @default(LATER)
+  votes       Int           @default(0)
+  createdAt   DateTime      @default(now())
+}
+
+// ---------- API status / status page ----------
+
+model StatusComponent {
+  id            String   @id @default(cuid())
+  name          String // "Chat API", "LiteLLM Gateway", "Playground"...
+  status        String   @default("operational") // operational | degraded | outage
+  uptimePct90d  Float    @default(100)
+  updatedAt     DateTime @updatedAt
+}
+
+// ---------- CMS: Blog ----------
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model BlogPost {
+  id          String     @id @default(cuid())
+  title       String
+  slug        String     @unique
+  excerpt     String     @db.Text
+  content     String     @db.Text
+  category    String // "Research" | "Product" | "Engineering" | "Company"
+  status      PostStatus @default(DRAFT)
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id])
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ---------- CMS: Research papers ----------
+
+model ResearchPaper {
+  id          String     @id @default(cuid())
+  title       String
+  slug        String     @unique
+  summary     String     @db.Text
+  tag         String // "NeurIPS 2026", "arXiv preprint"...
+  category    String // "Papers" | "Projects" | "Datasets" | "Experiments"
+  status      PostStatus @default(DRAFT)
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id])
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ---------- Site-wide announcement banner ----------
+// A small addition beyond what was asked for: admins can push a dismissible
+// banner (a product update, an incident notice, a launch announcement) that
+// shows across the whole site without a deploy. Only one should be `active`
+// at a time — the banner component always shows the most recent active one.
+
+model Announcement {
+  id        String   @id @default(cuid())
+  message   String
+  href      String? // optional "learn more" link
+  level     String   @default("info") // info | success | warning
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}

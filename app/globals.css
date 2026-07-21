@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(56, 189, 248, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #05070d;
+  color: #e7ecf6;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(124, 108, 246, 0.1), transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(53, 212, 255, 0.1), transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+::selection {
+  background: rgba(53, 212, 255, 0.3);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #05070d;
+}
+::-webkit-scrollbar-thumb {
+  background: #1c2333;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #1a8fb8;
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/[0.04] border border-white/[0.08] rounded-lg backdrop-blur-md transition-all duration-300;
+  }
+  .glass:hover {
+    border-color: rgba(56, 189, 248, 0.35);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 text-[0.72rem] tracking-[0.14em] uppercase text-cyan px-3.5 py-1.5 rounded-full;
+    border: 1px solid rgba(53, 212, 255, 0.25);
+    background: rgba(53, 212, 255, 0.06);
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-2 px-5 py-3 rounded-md text-sm font-medium cursor-pointer transition-all duration-300 whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply bg-grad-brand text-[#04121a] font-semibold;
+  }
+  .btn-primary:hover {
+    box-shadow: 0 8px 30px rgba(53, 212, 255, 0.35);
+    transform: translateY(-2px);
+  }
+  .btn-ghost {
+    @apply bg-white/[0.04] border border-white/[0.08] text-ink;
+  }
+  .btn-ghost:hover {
+    border-color: rgba(56, 189, 248, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
