@@ -1,9 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/require-admin";
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const admin = await requireAdmin();
-  if (!admin) return Response.json({ error: "Admins only." }, { status: 403 });
+
+  if (!admin) {
+    return Response.json({ error: "Admins only." }, { status: 403 });
+  }
+
+  const { id } = await params;
 
   const body = (await req.json().catch(() => ({}))) as {
     title?: string;
@@ -13,11 +21,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     status?: "DRAFT" | "PUBLISHED";
   };
 
-  const existing = await prisma.researchPaper.findUnique({ where: { id: params.id } });
-  if (!existing) return Response.json({ error: "Paper not found." }, { status: 404 });
+  const existing = await prisma.researchPaper.findUnique({
+    where: { id },
+  });
+
+  if (!existing) {
+    return Response.json({ error: "Paper not found." }, { status: 404 });
+  }
 
   const paper = await prisma.researchPaper.update({
-    where: { id: params.id },
+    where: { id },
     data: {
       title: body.title ?? existing.title,
       summary: body.summary ?? existing.summary,
@@ -34,10 +47,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return Response.json({ paper });
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const admin = await requireAdmin();
-  if (!admin) return Response.json({ error: "Admins only." }, { status: 403 });
 
-  await prisma.researchPaper.delete({ where: { id: params.id } });
+  if (!admin) {
+    return Response.json({ error: "Admins only." }, { status: 403 });
+  }
+
+  const { id } = await params;
+
+  await prisma.researchPaper.delete({
+    where: { id },
+  });
+
   return Response.json({ ok: true });
-}
+  }
